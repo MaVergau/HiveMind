@@ -1,0 +1,12 @@
+# Microsoft Agent Framework with Azure AI integration
+# The --pre flag is REQUIRED while Agent Framework is in preview
+agent-framework-azure-ai
+
+# Azure authentication
+azure-identity
+
+# Environment variable management
+python-dotenv
+
+# File handling utilities
+pathlib

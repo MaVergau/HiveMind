@@ -1,0 +1,7 @@
+# Ignore all raw input files
+rawinput/
+RawInput/
+
+# But track the structure documentation
+!rawinput/README.md
+!RawInput/README.md
