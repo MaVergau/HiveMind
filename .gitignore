@@ -44,3 +44,6 @@ Thumbs.db
 # Agent data
 agent_data/
 *.db
+# Data directories (contain sensitive/generated files)
+RawInput/
+markdown_files/

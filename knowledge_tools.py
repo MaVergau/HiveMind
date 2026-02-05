@@ -4,78 +4,128 @@ Provides tools for querying and managing the time-aware knowledge base
 """
 
 import json
+import re
 from pathlib import Path
 from typing import List, Dict, Any
 from datetime import datetime
 
 
 class KnowledgeQuery:
-    """Query interface for the knowledge base"""
+    """Query interface for the markdown-based knowledge base"""
     
-    def __init__(self, knowledge_base_dir: Path = Path("knowledge_base")):
+    def __init__(self, knowledge_base_dir: Path = Path("markdown_files")):
         self.kb_dir = knowledge_base_dir
-        self.categories_dir = self.kb_dir / "categories"
-        self.temporal_dir = self.kb_dir / "temporal"
         self.entities_dir = self.kb_dir / "entities"
-        self.index_dir = self.kb_dir / "indexes"
+        self.events_dir = self.kb_dir / "events"
+        self.temporal_dir = self.kb_dir / "temporal"
+    
+    def parse_markdown_frontmatter(self, file_path: Path) -> Dict[str, Any]:
+        """Parse YAML frontmatter and content from markdown file"""
+        content = file_path.read_text(encoding='utf-8')
+        
+        # Extract YAML frontmatter
+        frontmatter = {}
+        if content.startswith('---'):
+            parts = content.split('---', 2)
+            if len(parts) >= 3:
+                yaml_content = parts[1].strip()
+                for line in yaml_content.split('\n'):
+                    if ':' in line:
+                        key, value = line.split(':', 1)
+                        frontmatter[key.strip()] = value.strip()
+                
+                # Content is after second ---
+                body = parts[2].strip()
+            else:
+                body = content
+        else:
+            body = content
+        
+        return {
+            'frontmatter': frontmatter,
+            'content': body,
+            'file_path': str(file_path)
+        }
     
     def query_by_category(self, category: str) -> List[Dict]:
         """Retrieve all artifacts from a specific category"""
-        category_file = self.categories_dir / f"{category}.jsonl"
+        category_map = {
+            'people': self.entities_dir / 'people',
+            'organizations': self.entities_dir / 'organizations',
+            'technologies': self.entities_dir / 'technologies',
+            'topics': self.entities_dir / 'topics',
+            'meetings': self.events_dir / 'meetings',
+            'decisions': self.events_dir / 'decisions',
+            'milestones': self.events_dir / 'milestones'
+        }
         
-        if not category_file.exists():
+        category_dir = category_map.get(category.lower())
+        if not category_dir or not category_dir.exists():
             return []
         
         artifacts = []
-        with open(category_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                if line.strip():
-                    artifacts.append(json.loads(line))
+        for md_file in category_dir.glob('*.md'):
+            if md_file.name == 'TEMPLATE.md':
+                continue
+            parsed = self.parse_markdown_frontmatter(md_file)
+            artifacts.append({
+                'category': category,
+                'source': str(md_file),
+                'name': parsed['frontmatter'].get('name', md_file.stem),
+                'type': parsed['frontmatter'].get('type', category),
+                'frontmatter': parsed['frontmatter'],
+                'content': parsed['content']
+            })
         
         return artifacts
     
     def query_by_temporal_context(self, temporal_context: str) -> List[Dict]:
         """Retrieve artifacts from a specific time period"""
-        temporal_key = temporal_context.replace('/', '-').replace(' ', '_')
-        temporal_file = self.temporal_dir / f"{temporal_key}.jsonl"
+        # For now, search through meetings and events for temporal references
+        results = []
         
-        if not temporal_file.exists():
-            return []
+        meetings = self.query_by_category('meetings')
+        for meeting in meetings:
+            date = meeting['frontmatter'].get('date', '')
+            if temporal_context.lower() in date.lower():
+                results.append(meeting)
         
-        refs = []
-        with open(temporal_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                if line.strip():
-                    refs.append(json.loads(line))
-        
-        return refs
+        return results
     
     def query_by_entity(self, entity_type: str, entity_name: str) -> List[Dict]:
         """Find artifacts mentioning a specific entity"""
-        entity_file = self.entities_dir / f"{entity_type}.jsonl"
+        matches = self.query_by_category(entity_type)
         
-        if not entity_file.exists():
-            return []
+        # Filter by name
+        filtered = []
+        for match in matches:
+            name = match.get('name', '').lower()
+            if entity_name.lower() in name:
+                filtered.append(match)
         
-        matches = []
-        with open(entity_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                if line.strip():
-                    entry = json.loads(line)
-                    if entity_name.lower() in entry.get("entity", "").lower():
-                        matches.append(entry)
-        
-        return matches
+        return filtered
     
     def get_master_index(self) -> Dict:
-        """Get the master index of the knowledge base"""
-        index_file = self.index_dir / "master_index.json"
+        """Get summary statistics of the knowledge base"""
+        stats = {
+            'generated_at': datetime.now().isoformat(),
+            'categories': {},
+            'total_artifacts': 0
+        }
         
-        if not index_file.exists():
-            return {}
+        # Count entities
+        for entity_type in ['people', 'organizations', 'technologies', 'topics']:
+            artifacts = self.query_by_category(entity_type)
+            stats['categories'][entity_type] = [a['name'] for a in artifacts]
+            stats['total_artifacts'] += len(artifacts)
         
-        with open(index_file, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        # Count events
+        for event_type in ['meetings', 'decisions', 'milestones']:
+            artifacts = self.query_by_category(event_type)
+            stats['categories'][event_type] = [a['name'] for a in artifacts]
+            stats['total_artifacts'] += len(artifacts)
+        
+        return stats
     
     def search_content(self, query: str, category: str = None) -> List[Dict]:
         """Search for text across artifacts"""
@@ -85,12 +135,16 @@ class KnowledgeQuery:
         if category:
             categories_to_search = [category]
         else:
-            categories_to_search = [f.stem for f in self.categories_dir.glob("*.jsonl")]
+            categories_to_search = ['people', 'organizations', 'technologies', 'topics', 'meetings']
         
         for cat in categories_to_search:
             artifacts = self.query_by_category(cat)
             for artifact in artifacts:
-                if query.lower() in artifact.get("content", "").lower():
+                # Search in both name and content
+                name = artifact.get('name', '').lower()
+                content = artifact.get('content', '').lower()
+                
+                if query.lower() in name or query.lower() in content:
                     results.append(artifact)
         
         return results
@@ -104,13 +158,13 @@ def list_knowledge_categories() -> str:
     index = kb.get_master_index()
     
     if not index or not index.get("categories"):
-        return "Knowledge base is empty. Run ingestion first with: python knowledge_system.py"
+        return "Knowledge base is empty or not found."
     
     categories = index["categories"]
     output = [f"📚 Knowledge Base Categories ({len(categories)} total):\n"]
     
-    for category, artifact_ids in sorted(categories.items()):
-        output.append(f"  • {category}: {len(artifact_ids)} artifacts")
+    for category, items in sorted(categories.items()):
+        output.append(f"  • {category}: {len(items)} items")
     
     return "\n".join(output)
 
@@ -119,25 +173,32 @@ def query_knowledge_category(category: str) -> str:
     """Query all knowledge artifacts from a specific category.
     
     Args:
-        category: Name of the category to query (e.g., 'LinkedIn', 'Meeting transcripts')
+        category: Name of the category to query (e.g., 'people', 'organizations', 'technologies', 'meetings')
     """
     kb = KnowledgeQuery()
     artifacts = kb.query_by_category(category)
     
     if not artifacts:
-        return f"No artifacts found in category '{category}'"
+        return f"No items found in category '{category}'. Available categories: people, organizations, technologies, topics, meetings"
     
-    output = [f"📁 Category: {category} ({len(artifacts)} artifacts)\n"]
+    output = [f"📁 Category: {category} ({len(artifacts)} items)\n"]
     
-    for i, artifact in enumerate(artifacts[:5], 1):  # Show first 5
-        source = Path(artifact["source"]).name
-        snippet = artifact["content"][:200].replace('\n', ' ')
-        output.append(f"{i}. {source}")
-        output.append(f"   {snippet}...")
-        output.append("")
+    for i, artifact in enumerate(artifacts[:10], 1):  # Show first 10
+        name = artifact.get('name', 'Unknown')
+        
+        # Add key details based on type
+        if category == 'people':
+            role = artifact['frontmatter'].get('role', 'Unknown Role')
+            org = artifact['frontmatter'].get('organization', 'Unknown Org')
+            output.append(f"{i}. **{name}** - {role} at {org}")
+        elif category == 'meetings':
+            date = artifact['frontmatter'].get('date', 'Unknown Date')
+            output.append(f"{i}. **{name}** ({date})")
+        else:
+            output.append(f"{i}. **{name}**")
     
-    if len(artifacts) > 5:
-        output.append(f"   ... and {len(artifacts) - 5} more")
+    if len(artifacts) > 10:
+        output.append(f"\n   ... and {len(artifacts) - 10} more")
     
     return "\n".join(output)
 
@@ -183,19 +244,22 @@ def search_knowledge(query: str, category: str = None) -> str:
     output = [f"🔍 Search: '{query}' ({len(results)} matches)\n"]
     
     for i, artifact in enumerate(results[:5], 1):
-        source = Path(artifact["source"]).name
-        cat = artifact["category"]
+        name = artifact.get('name', 'Unknown')
+        cat = artifact.get('category', 'unknown')
         
-        # Find the matching context
-        content = artifact["content"].lower()
-        idx = content.find(query.lower())
-        if idx != -1:
-            start = max(0, idx - 50)
-            end = min(len(content), idx + len(query) + 50)
-            context = artifact["content"][start:end].replace('\n', ' ')
-            output.append(f"{i}. [{cat}] {source}")
-            output.append(f"   ...{context}...")
-            output.append("")
+        # Show relevant excerpt
+        content = artifact.get('content', '')
+        if len(content) > 200:
+            content = content[:200] + "..."
+        
+        output.append(f"{i}. [{cat}] **{name}**")
+        if category != 'people':  # Don't show content snippet for people (show in frontmatter instead)
+            output.append(f"   {content.replace(chr(10), ' ')}")
+        else:
+            role = artifact['frontmatter'].get('role', 'Unknown Role')
+            org = artifact['frontmatter'].get('organization', 'Unknown')
+            output.append(f"   {role} at {org}")
+        output.append("")
     
     if len(results) > 5:
         output.append(f"   ... and {len(results) - 5} more matches")
@@ -214,17 +278,40 @@ def find_entity_knowledge(entity_type: str, entity_name: str) -> str:
     matches = kb.query_by_entity(entity_type, entity_name)
     
     if not matches:
+        # Try searching across all content
+        all_matches = kb.search_content(entity_name)
+        if all_matches:
+            return f"No direct {entity_type} entity found, but '{entity_name}' is mentioned in {len(all_matches)} items. Use search_knowledge for details."
         return f"No knowledge found for {entity_type} entity '{entity_name}'"
     
-    output = [f"👤 Entity: {entity_name} ({entity_type}) - {len(matches)} mentions\n"]
+    output = [f"👤 Entity: {entity_name} ({entity_type})\n"]
     
-    for i, match in enumerate(matches[:10], 1):
-        source = Path(match["source"]).name
-        category = match["category"]
-        output.append(f"{i}. [{category}] {source}")
-    
-    if len(matches) > 10:
-        output.append(f"\n   ... and {len(matches) - 10} more")
+    for match in matches:
+        name = match.get('name', 'Unknown')
+        output.append(f"**{name}**")
+        
+        # Show key details based on entity type
+        if entity_type == 'people':
+            role = match['frontmatter'].get('role', 'Unknown')
+            org = match['frontmatter'].get('organization', 'Unknown')
+            location = match['frontmatter'].get('location', 'Unknown')
+            output.append(f"  Role: {role}")
+            output.append(f"  Organization: {org}")
+            output.append(f"  Location: {location}")
+            
+            # Show expertise
+            content = match.get('content', '')
+            if '## Expertise' in content:
+                expertise_section = content.split('## Expertise')[1].split('##')[0].strip()
+                output.append(f"  Expertise: {expertise_section[:200]}...")
+        
+        elif entity_type == 'organizations':
+            output.append(f"  Type: {match['frontmatter'].get('tags', 'Unknown')}")
+        
+        elif entity_type == 'technologies':
+            output.append(f"  Category: {match['frontmatter'].get('category', 'Unknown')}")
+        
+        output.append("")
     
     return "\n".join(output)
 

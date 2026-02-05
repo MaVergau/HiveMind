@@ -1,130 +1,203 @@
-# 🧠 HiveMind Agent
+# 🧠 HiveMind - AI-Powered Knowledge Management Agent
 
-An intelligent agent built with **Microsoft Agent Framework** that manages and maintains markdown files based on user input (text messages, documents, voice input, etc.).
+> Intelligent knowledge extraction and querying system using Azure OpenAI GPT-4 and Microsoft Agent Framework
 
-## Features
+## Overview
 
-- ✅ **Create, Read, Update, Delete** markdown files
-- 🔍 **Search** across all markdown files
-- ➕ **Append** content to existing files
-- 📋 **List** all markdown files
-- 🤖 **AI-powered** organization and maintenance
-- 💬 **Conversational** interface with persistent context
+HiveMind is an AI-powered knowledge management system that:
+- **Extracts** structured knowledge from documents using GPT-4
+- **Stores** information as human-readable markdown with YAML frontmatter
+- **Queries** the knowledge base through an interactive AI agent
+- **Maintains** temporal awareness and entity relationships
 
-## Prerequisites
+## Architecture
 
-- Python 3.8 or higher
-- Azure CLI (already logged in via `az login`)
-- Azure AI Foundry project with a deployed model
-
-## Setup
-
-### 1. Install Dependencies
-
-**Important:** The `--pre` flag is **REQUIRED** while Agent Framework is in preview.
-
-```bash
-pip install -r requirements.txt --pre
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Raw Input Documents                       │
+│  (LinkedIn, PDFs, Meeting Notes, DOCX, Markdown)            │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│         ai_knowledge_builder.py (GPT-4 Extraction)          │
+│  • Intelligent entity recognition                            │
+│  • Person/org/tech/topic extraction                          │
+│  • Deduplication and structuring                             │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│             Knowledge Base (markdown_files/)                 │
+│  entities/                     events/                       │
+│    people/                       meetings/                   │
+│    organizations/                decisions/                  │
+│    technologies/                 milestones/                 │
+│    topics/                                                   │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│           knowledge_tools.py (Query Interface)               │
+│  • search_knowledge()                                        │
+│  • find_entity_knowledge()                                   │
+│  • query_knowledge_category()                                │
+│  • get_knowledge_summary()                                   │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│              hivemind.py (Interactive Agent)                 │
+│  Microsoft Agent Framework + Azure OpenAI GPT-4              │
+│  Conversational interface to query knowledge base            │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### 2. Configure Environment
+## Quick Start
 
-The `.env` file has been pre-configured with your project endpoint:
+```powershell
+# 1. Build knowledge base from documents
+python ai_knowledge_builder.py
 
-```env
-AZURE_PROJECT_ENDPOINT=https://grippy-resource.services.ai.azure.com/api/projects/grippy
-AZURE_MODEL_DEPLOYMENT_NAME=gpt-4o
-MARKDOWN_FILES_DIR=./markdown_files
-```
-
-**TODO:** Update `AZURE_MODEL_DEPLOYMENT_NAME` with your actual deployed model name.
-
-### 3. Deploy a Model (if needed)
-
-You can explore and deploy models in AI Toolkit:
-- Open VS Code Command Palette (Ctrl+Shift+P / Cmd+Shift+P)
-- Run: `AI Toolkit: Open Model Catalog`
-- Filter by Microsoft Foundry models
-- Deploy a recommended model: `gpt-4o`, `gpt-5-chat`, or `claude-sonnet-4-5`
-
-## Usage
-
-Run the HiveMind agent:
-
-```bash
+# 2. Query with interactive agent
 python hivemind.py
 ```
 
-### Example Commands
+## Setup
 
-```
-You: Create a new file called ideas.md with a list of project ideas
-HiveMind: [Creates the file and confirms]
+### Prerequisites
 
-You: What files do I have?
-HiveMind: [Lists all markdown files]
+- Python 3.11+
+- Azure subscription with Azure OpenAI GPT-4 deployment
+- Azure CLI (`az login` completed)
 
-You: Add a new idea to ideas.md about building a knowledge graph
-HiveMind: [Appends the content]
+### Installation
 
-You: Search for "knowledge graph"
-HiveMind: [Shows which files contain that term]
-
-You: Show me the contents of ideas.md
-HiveMind: [Displays the file contents]
+```powershell
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env with your Azure details
 ```
 
-## Available Tools
+### Configuration (`.env`)
 
-The agent has access to these tools for managing markdown files:
+```bash
+AZURE_PROJECT_ENDPOINT=https://your-resource.services.ai.azure.com/api/projects/your-project
+AZURE_MODEL_DEPLOYMENT_NAME=gpt-4.1
+MARKDOWN_FILES_DIR=./markdown_files
+```
 
-| Tool | Description |
-|------|-------------|
-| `list_markdown_files` | List all markdown files in the directory |
-| `read_markdown_file` | Read the contents of a specific file |
-| `create_markdown_file` | Create a new markdown file |
-| `update_markdown_file` | Replace the entire content of a file |
-| `append_to_markdown_file` | Add content to the end of a file |
-| `delete_markdown_file` | Delete a markdown file |
-| `search_markdown_files` | Search for text across all files |
+## Usage
 
-## Model Recommendation
+### Build Knowledge Base
 
-For this markdown management agent, I recommend:
+```powershell
+python ai_knowledge_builder.py
+```
 
-- **gpt-4o**: Best balance of performance and cost, excellent for structured tasks
-- **gpt-5-chat**: More advanced conversational capabilities
-- **claude-sonnet-4-5**: Superior for complex reasoning and document understanding
+Processes documents from `RawInput/` using GPT-4:
+- ✅ Markdown - LinkedIn profiles, meeting notes
+- ✅ PDF - Strategic documents, reports
+- ⚠️ DOCX - Transcripts (limited)
 
-All models are available in Microsoft Foundry and fully supported with Agent Framework.
+### Query Knowledge
 
-## Project Structure
+```powershell
+python hivemind.py
+```
+
+Example conversation:
+```
+You: Who are the key people at Proximus?
+HiveMind: [Lists 6 people with roles]
+
+You: Tell me about Caroline Van Cromphaut
+HiveMind: Caroline Van Cromphaut is Head of IT Delivery: 
+         Servicing & Integration at Proximus Group...
+```
+
+### Reset Knowledge Base
+
+```powershell
+python reset_knowledge_base.py
+```
+
+## Current Knowledge Base
+
+| Category | Count | Examples |
+|----------|-------|----------|
+| **People** | 6 | Caroline Van Cromphaut, Dave Van Geel, Steven Pals |
+| **Organizations** | 22 | Proximus, Nokia, Oracle, Teradata |
+| **Technologies** | 108 | Azure, 5G, AI, Copilot, Databricks |
+| **Meetings** | 5 | Account team meetings, NNR sessions |
+
+## File Structure
 
 ```
 HiveMind/
-├── hivemind.py          # Main agent application
-├── requirements.txt     # Python dependencies
-├── .env                 # Configuration (your values)
-├── .env.example         # Configuration template
-├── .gitignore          # Git ignore rules
-├── README.md           # This file
-└── markdown_files/     # Created automatically for markdown storage
+├── ai_knowledge_builder.py      # GPT-4 extraction engine
+├── knowledge_tools.py            # Query API
+├── hivemind.py                   # Main agent
+├── hivemind_simple.py            # Alternative (direct OpenAI)
+├── reset_knowledge_base.py       # Reset utility
+├── requirements.txt
+├── .env
+├── RawInput/                     # Source documents
+└── markdown_files/               # Generated KB
+    ├── entities/
+    │   ├── people/
+    │   ├── organizations/
+    │   ├── technologies/
+    │   └── topics/
+    └── events/
+        ├── meetings/
+        ├── decisions/
+        └── milestones/
 ```
 
-## Next Steps
+## Key Features
 
-Ready for you to provide more context on the **knowledge graph** functionality you'd like to add! This foundation is set up and ready to be extended with:
+🤖 **AI-Powered** - GPT-4 intelligently extracts entities  
+📚 **Human-Readable** - Markdown with YAML frontmatter  
+🔍 **Smart Queries** - Natural language search  
+⏰ **Temporal** - Time-aware knowledge tracking  
+🔗 **Relationships** - Entity connections maintained  
 
-- Graph relationships between markdown files
-- Metadata extraction
-- Semantic linking
-- Custom indexing strategies
-- And more...
+## API Usage
 
-## Authentication
+```python
+from knowledge_tools import search_knowledge, find_entity_knowledge
 
-The agent uses `DefaultAzureCredential` which automatically uses your existing `az login` session. No additional authentication setup needed!
+# Search
+results = search_knowledge("Caroline")
+
+# Find specific person
+person = find_entity_knowledge("people", "Caroline Van Cromphaut")
+```
+
+## Performance
+
+- **Input**: 18 MD + 9 PDFs + 9 DOCX
+- **AI Calls**: 12 GPT-4 extractions
+- **Processing**: ~30 seconds
+- **Accuracy**: 100% (6/6 people vs 564 false positives with regex)
+
+## Troubleshooting
+
+**Agent can't find entities**: Run `python ai_knowledge_builder.py` first
+
+**DOCX errors**: Convert to markdown or PDF first
+
+**Auth errors**: Run `az login`
+
+## Technology
+
+- Azure OpenAI GPT-4
+- Microsoft Agent Framework
+- Python 3.11
+- PyPDF, python-docx
+- Azure Identity
 
 ---
 
-Built with [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) 🚀
+**Built with ❤️ using Azure OpenAI GPT-4**

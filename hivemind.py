@@ -12,7 +12,7 @@ from typing import Annotated
 
 from agent_framework import ChatAgent
 from agent_framework.azure import AzureOpenAIChatClient
-from azure.identity import DefaultAzureCredential
+from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from dotenv import load_dotenv
 
 # Import knowledge system tools
@@ -31,25 +31,11 @@ load_dotenv()
 
 # Configuration
 PROJECT_ENDPOINT = os.getenv("AZURE_PROJECT_ENDPOINT")
-MODEL_DEPLOYMENT_NAME = os.getenv("AZURE_MODEL_DEPLOYMENT_NAME")
+MODEL_DEPLOYMENT_NAME = os.getenv("AZURE_MODEL_DEPLOYMENT_NAME", "gpt-4.1")
 MARKDOWN_DIR = Path(os.getenv("MARKDOWN_FILES_DIR", "./markdown_files"))
 
-# Convert Foundry project endpoint to Azure OpenAI endpoint
-# Extract the resource name from the Foundry endpoint
-def get_azure_openai_endpoint(foundry_endpoint: str) -> str:
-    """Convert Foundry project endpoint to Azure OpenAI endpoint format."""
-    # Extract resource name from https://grippy-resource.services.ai.azure.com/api/projects/grippy
-    # Should become https://grippy-resource.openai.azure.com/
-    import re
-    match = re.match(r"https://([^.]+)\.services\.ai\.azure\.com", foundry_endpoint)
-    if match:
-        resource_name = match.group(1)
-        return f"https://{resource_name}.openai.azure.com/"
-    else:
-        # Fallback: assume it's already in the correct format
-        return foundry_endpoint
-
-AZURE_OPENAI_ENDPOINT = get_azure_openai_endpoint(PROJECT_ENDPOINT) if PROJECT_ENDPOINT else None
+# Use the cognitive services endpoint directly
+AZURE_OPENAI_ENDPOINT = "https://grippy-resource.cognitiveservices.azure.com/"
 
 
 # Markdown file management tools
@@ -247,12 +233,18 @@ Always be transparent about sources and provide clear summaries.
     print(f"🔗 Azure OpenAI Endpoint: {AZURE_OPENAI_ENDPOINT}")
     print("\nType 'exit' to quit\n")
     
-    # Create credential and chat client
+    # Create credential and token provider for cognitive services
     credential = DefaultAzureCredential()
+    token_provider = get_bearer_token_provider(
+        credential,
+        "https://cognitiveservices.azure.com/.default"
+    )
+    
     chat_client = AzureOpenAIChatClient(
         endpoint=AZURE_OPENAI_ENDPOINT,
         deployment_name=MODEL_DEPLOYMENT_NAME,
-        credential=credential,
+        ad_token_provider=token_provider,
+        api_version="2024-05-01-preview"
     )
     
     # Create the agent

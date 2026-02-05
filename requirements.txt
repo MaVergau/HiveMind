@@ -8,5 +8,9 @@ azure-identity
 # Environment variable management
 python-dotenv
 
+# Document processing
+pypdf
+markitdown[pdf,docx]
+
 # File handling utilities
 pathlib
