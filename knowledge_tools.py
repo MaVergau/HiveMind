@@ -349,3 +349,77 @@ def get_knowledge_summary() -> str:
             output.append(f"  • {etype}: {len(elist)} unique entities")
     
     return "\n".join(output)
+
+def find_relationships(entity_name: str, relationship_type: str = None) -> str:
+    """Find relationships for a specific entity.
+    
+    Args:
+        entity_name: Name of the entity to find relationships for
+        relationship_type: Optional filter for specific relationship type (works_for, uses, attended, etc.)
+    """
+    kb = KnowledgeQuery()
+    relationships = []
+    
+    # Search for entity across all categories
+    for category in ['people', 'organizations', 'technologies', 'topics', 'meetings']:
+        artifacts = kb.query_by_category(category)
+        for artifact in artifacts:
+            name = artifact.get('name', '').lower()
+            if entity_name.lower() in name:
+                # Check frontmatter for relationships
+                frontmatter = artifact.get('frontmatter', {})
+                if 'relationships' in str(frontmatter):
+                    # Parse relationships from frontmatter
+                    for key, value in frontmatter.items():
+                        if key in ['works_for', 'employs', 'uses_technologies', 'attended', 'discussed_in']:
+                            if not relationship_type or key == relationship_type:
+                                relationships.append({
+                                    'entity': artifact.get('name'),
+                                    'type': key,
+                                    'target': value
+                                })
+    
+    if not relationships:
+        return f"No relationships found for '{entity_name}'"
+    
+    output = [f"🔗 Relationships for '{entity_name}':\n"]
+    for rel in relationships:
+        output.append(f"  • {rel['type']}: {rel['target']}")
+    
+    return "\n".join(output)
+
+
+def get_entity_network(entity_name: str, depth: int = 1) -> str:
+    """Get the network of entities connected to the given entity.
+    
+    Args:
+        entity_name: Name of the entity
+        depth: How many levels deep to traverse (1 = direct connections, 2 = connections of connections)
+    """
+    kb = KnowledgeQuery()
+    network = {entity_name: []}
+    
+    # Find direct relationships
+    for category in ['people', 'organizations', 'technologies', 'topics', 'meetings']:
+        artifacts = kb.query_by_category(category)
+        for artifact in artifacts:
+            name = artifact.get('name', '').lower()
+            if entity_name.lower() in name:
+                frontmatter = artifact.get('frontmatter', {})
+                # Extract all relationship values
+                for key, value in frontmatter.items():
+                    if key in ['works_for', 'organization', 'employs', 'uses_technologies', 'attended']:
+                        if isinstance(value, list):
+                            network[entity_name].extend(value)
+                        else:
+                            network[entity_name].append(value)
+    
+    if not network[entity_name]:
+        return f"No connections found for '{entity_name}'"
+    
+    output = [f"🕸️  Entity Network for '{entity_name}':\n"]
+    output.append(f"Direct Connections ({len(network[entity_name])}):")
+    for conn in set(network[entity_name]):
+        output.append(f"  • {conn}")
+    
+    return "\n".join(output)

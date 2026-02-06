@@ -22,7 +22,9 @@ from knowledge_tools import (
     query_temporal_knowledge,
     search_knowledge,
     find_entity_knowledge,
-    get_knowledge_summary
+    get_knowledge_summary,
+    find_relationships,
+    get_entity_network
 )
 
 
@@ -193,6 +195,8 @@ async def run_hivemind():
         search_knowledge,
         find_entity_knowledge,
         get_knowledge_summary,
+        find_relationships,  # NEW: Find entity relationships
+        get_entity_network,  # NEW: Explore entity networks
     ]
     
     # Agent instructions
@@ -200,12 +204,14 @@ async def run_hivemind():
 
 Your capabilities:
 
-KNOWLEDGE BASE (Time-Aware Query System):
+KNOWLEDGE BASE (Time-Aware Query System with Relationships):
 - Query knowledge by category (e.g., LinkedIn profiles, Meeting transcripts, Annual Reports)
 - Search knowledge by time period (e.g., '2024', 'Q1 2025', 'January 2025')
-- Find knowledge about specific entities (people, organizations, technologies)
+- Find knowledge about specific entities (people, organizations, technologies, topics)
 - Full-text search across all ingested knowledge
 - Get summaries and overviews of the knowledge base
+- **NEW: Find relationships between entities** (who works where, who uses what tech, who attended meetings)
+- **NEW: Explore entity networks** (discover connections between people, orgs, and technologies)
 
 MARKDOWN FILES (Active Working Documents):
 - Create, read, update, and delete markdown files
@@ -215,11 +221,13 @@ MARKDOWN FILES (Active Working Documents):
 
 WORKFLOW:
 1. Use knowledge base tools to retrieve and analyze existing information
-2. Use markdown tools to create structured outputs, summaries, and working documents
-3. Help users synthesize knowledge from raw inputs into actionable insights
+2. Leverage relationship queries to understand connections between entities
+3. Use markdown tools to create structured outputs, summaries, and working documents
+4. Help users synthesize knowledge from raw inputs into actionable insights
 
 When responding to queries:
 - First check the knowledge base for relevant information
+- Explore relationships to provide deeper context (e.g., "Caroline works at Proximus and uses Azure")
 - Provide temporal context when available (e.g., "According to Q1 2024 meeting...")
 - Cross-reference multiple sources when answering
 - Create markdown files to capture synthesized insights
@@ -255,6 +263,10 @@ Always be transparent about sources and provide clear summaries.
         tools=tools,
     )
     
+    # Create a thread to maintain conversation history
+    from agent_framework import AgentThread
+    thread = AgentThread()
+    
     while True:
         # Get user input
         user_input = input("You: ").strip()
@@ -266,11 +278,11 @@ Always be transparent about sources and provide clear summaries.
         if not user_input:
             continue
         
-        # Stream the agent's response
+        # Stream the agent's response with thread context for conversation history
         print("HiveMind: ", end="", flush=True)
         
         try:
-            async for chunk in agent.run_stream(user_input):
+            async for chunk in agent.run_stream(user_input, thread=thread):
                 if chunk.text:
                     print(chunk.text, end="", flush=True)
             
